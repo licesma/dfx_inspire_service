@@ -19,13 +19,9 @@ endif()
 
 find_package(Boost COMPONENTS program_options REQUIRED)
 
-include_directories(
-  /usr/local/include/ddscxx
-  /usr/local/include/iceoryx/v2.0.2
-  include
-)
+include_directories(include)
 
-link_libraries(unitree_sdk2 ddsc ddscxx rt pthread)
+link_libraries(unitree_sdk2 fmt rt pthread)
 link_libraries(libboost_program_options.a)
 
 add_executable(inspire_g1 inspire_g1.cpp)
