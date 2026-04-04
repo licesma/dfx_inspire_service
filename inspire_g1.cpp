@@ -12,12 +12,10 @@ class InspireRunner
 public:
   InspireRunner()
   {
-    serial1 = std::make_shared<SerialPort>("/dev/ttyUSB1", B115200);
-    serial2 = std::make_shared<SerialPort>("/dev/ttyUSB2", B115200);
+    serial1 = std::make_shared<SerialPort>("/dev/ttyUSB0", B115200);
 
-    // If your left and right hand controls are reversed, you can swap the positions of `serial1` and `serial2` below.
+    // Single hand on ttyUSB0 (right hand)
     righthand = std::make_shared<inspire::InspireHand>(serial1, 1);
-    lefthand = std::make_shared<inspire::InspireHand>(serial2, 1);
 
     // dds
     handcmd = std::make_shared<unitree::robot::SubscriptionBase<unitree_go::msg::dds_::MotorCmds_>>(
@@ -43,7 +41,6 @@ public:
         qcmd(i) = handcmd->msg_.cmds()[i].q();
       }
       righthand->SetPosition(qcmd.block<6, 1>(0, 0));
-      lefthand->SetPosition(qcmd.block<6, 1>(6, 0));
     }
 
     // Recv state
@@ -60,18 +57,6 @@ public:
       }
       // spdlog::debug("Failed to get right hand state");
     }
-    if(lefthand->GetPosition(qtemp) == 0)
-    {
-      qstate.block<6, 1>(6, 0) = qtemp;
-    }
-    else
-    {
-      for(int i(0); i<6; i++)
-      {
-        handstate->msg_.states()[i+6].lost()++;
-      }
-      // spdlog::debug("Failed to get left hand state");
-    }
     if(handstate->trylock())
     {
         for(int i(0); i<12; i++)
@@ -86,8 +71,6 @@ public:
 
   // inspire
   SerialPort::SharedPtr serial1;
-  SerialPort::SharedPtr serial2;
-  std::shared_ptr<inspire::InspireHand> lefthand;
   std::shared_ptr<inspire::InspireHand> righthand;
   Eigen::Matrix<double, 12, 1> qcmd, qstate;
 
