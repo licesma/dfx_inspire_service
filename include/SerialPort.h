@@ -9,6 +9,7 @@
 #include <sys/ioctl.h>
 #include <linux/serial.h>
 #include <unistd.h>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <chrono>
@@ -19,7 +20,9 @@ class SerialPort
 public:
   using SharedPtr = std::shared_ptr<SerialPort>;
 
-  SerialPort(std::string port, speed_t baudrate, int timeout_ms = 2)
+  SerialPort(std::string port, speed_t baudrate, int timeout_ms = 2,
+             const std::function<void(const std::string&)>& raise_error = nullptr)
+  : raise_error_(raise_error), port_(port)
   {
     set_timeout(timeout_ms);
     Init(port, baudrate);
@@ -27,12 +30,16 @@ public:
 
   ~SerialPort()
   {
-    close(fd_);
+    if (fd_ >= 0) close(fd_);
   }
 
   ssize_t send(const uint8_t* data, size_t len)
   {
     ssize_t ret = ::write(fd_, data, len);
+    if (ret < 0 && raise_error_)
+      raise_error_("[SerialPort] send() failed on " + port_);
+    else if (ret >= 0 && static_cast<size_t>(ret) != len && raise_error_)
+      raise_error_("[SerialPort] short write on " + port_);
     return ret;
   }
 
@@ -45,10 +52,10 @@ public:
     switch (select(fd_ + 1, &rSet_, NULL, NULL, &timeout_))
     {
     case -1: // error
-      // std::cout << "communication error" << std::endl;
+      if (raise_error_) raise_error_("[SerialPort] select() failed on " + port_);
       break;
     case 0: // timeout
-      // std::cout << "timeout" << std::endl;
+      if (raise_error_) raise_error_("[SerialPort] recv timeout on " + port_ + " — device not responding");
       break;
     default:
       recv_len = ::read(fd_, data, len);
@@ -72,8 +79,8 @@ private:
     fd_ = open(port.c_str(), O_RDWR | O_NOCTTY);
     if (fd_ < 0)
     {
-      printf("Open serial port %s failed\n", port.c_str());
-      exit(-1);
+      if (raise_error_) raise_error_("[SerialPort] Failed to open " + port);
+      return;
     }
 
     // Set attributes
@@ -102,9 +109,11 @@ private:
     ret = tcsetattr(fd_, TCSANOW, &option);
   }
 
-  int fd_;
+  int fd_{-1};
 	fd_set rSet_;
   timeval timeout_;
+  std::function<void(const std::string&)> raise_error_;
+  std::string port_;
 
   std::queue<uint8_t> recv_queue;
   std::array<uint8_t, 1024> recv_buf;
