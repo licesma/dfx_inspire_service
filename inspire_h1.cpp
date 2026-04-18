@@ -12,7 +12,7 @@ class InspireRunner
 public:
   InspireRunner()
   {
-    serial = std::make_shared<SerialPort>(param::serial_port, B115200);
+    serial = std::make_shared<SerialPort>(param::serial_port);
 
     // inspire
     righthand = std::make_shared<inspire::InspireHand>(serial, 1); // ID 1

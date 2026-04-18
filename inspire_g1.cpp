@@ -12,7 +12,7 @@ class InspireRunner
 public:
   InspireRunner()
   {
-    serial1 = std::make_shared<SerialPort>("/dev/ttyUSB0", B115200);
+    serial1 = std::make_shared<SerialPort>("/dev/ttyUSB0");
 
     // Single hand on ttyUSB0 (right hand)
     righthand = std::make_shared<inspire::InspireHand>(serial1, 1);

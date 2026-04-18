@@ -16,7 +16,7 @@ public:
   : serial_(serial), id(id)
   {
     if(!serial)
-      serial_ = std::make_shared<SerialPort>("/dev/ttyUSB0", B115200);
+      serial_ = std::make_shared<SerialPort>("/dev/ttyUSB0");
 
   }
 

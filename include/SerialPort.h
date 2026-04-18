@@ -20,9 +20,12 @@ class SerialPort
 public:
   using SharedPtr = std::shared_ptr<SerialPort>;
 
-  SerialPort(std::string port, speed_t baudrate, int timeout_ms = 2,
-             const std::function<void(const std::string&)>& raise_error = nullptr)
-  : raise_error_(raise_error), port_(port)
+  SerialPort(std::string port,
+             const std::function<void(const std::string&)>& raise_error = nullptr,
+             int timeout_ms = 200,
+             speed_t baudrate = B115200,
+             int max_consecutive_timeouts = 5)
+  : raise_error_(raise_error), port_(port), max_consecutive_timeouts_(max_consecutive_timeouts)
   {
     set_timeout(timeout_ms);
     Init(port, baudrate);
@@ -35,16 +38,30 @@ public:
 
   ssize_t send(const uint8_t* data, size_t len)
   {
+    if (fd_ < 0)
+    {
+      if (raise_error_)
+        raise_error_("[SerialPort] send() on unopened port " + port_);
+      return -1;
+    }
     ssize_t ret = ::write(fd_, data, len);
     if (ret < 0 && raise_error_)
       raise_error_("[SerialPort] send() failed on " + port_);
     else if (ret >= 0 && static_cast<size_t>(ret) != len && raise_error_)
       raise_error_("[SerialPort] short write on " + port_);
+    else if (ret >= 0)
+      consecutive_timeouts_ = 0;
     return ret;
   }
 
   ssize_t recv(uint8_t* data, size_t len)
   {
+    if (fd_ < 0)
+    {
+      if (raise_error_)
+        raise_error_("[SerialPort] recv() on unopened port " + port_);
+      return -1;
+    }
     FD_ZERO(&rSet_);
     FD_SET(fd_, &rSet_);
     ssize_t recv_len = 0;
@@ -55,10 +72,14 @@ public:
       if (raise_error_) raise_error_("[SerialPort] select() failed on " + port_);
       break;
     case 0: // timeout
-      if (raise_error_) raise_error_("[SerialPort] recv timeout on " + port_ + " — device not responding");
+      ++consecutive_timeouts_;
+      if (raise_error_ && consecutive_timeouts_ >= max_consecutive_timeouts_)
+        raise_error_("[SerialPort] recv timeout on " + port_ + " — device not responding");
       break;
     default:
       recv_len = ::read(fd_, data, len);
+      if (recv_len > 0)
+        consecutive_timeouts_ = 0;
       break;
     }
 
@@ -114,6 +135,8 @@ private:
   timeval timeout_;
   std::function<void(const std::string&)> raise_error_;
   std::string port_;
+  int max_consecutive_timeouts_{1};
+  int consecutive_timeouts_{0};
 
   std::queue<uint8_t> recv_queue;
   std::array<uint8_t, 1024> recv_buf;
